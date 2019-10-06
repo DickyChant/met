@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "dense": "cpp",
+        "iostream": "cpp",
+        "eigenvalues": "cpp"
+    },
+    "C_Cpp.default.cppStandard": "c++11",
+    "C_Cpp.default.includePath": ["$ROOTSYS/include"]
+}
