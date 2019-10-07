@@ -4,8 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "ROOTSYS/include/**",
-                "/home/stqian/root/include"
+                "${ROOTSYS}/include/**",
+                "~/root/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
@@ -15,8 +15,7 @@
             "compilerArgs": [],
             "browse": {
                 "path": [
-                    "${workspaceFolder}/**",
-                    "ROOTSYS/include/**"
+                    "${workspaceFolder}/**"
                 ],
                 "limitSymbolsToIncludedHeaders": true
             }

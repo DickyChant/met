@@ -15,6 +15,7 @@
 #include <gsl/gsl_sf_laguerre.h>
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_sf_hermite.h>
+#include <gsl/gsl_sf_bessel.h>
 
 
 using namespace Eigen;
@@ -124,44 +125,198 @@ TH1D* generate_pdf(){
 
 	return test_pdf;
 }
+//
+constexpr int N_1 = 1E8;
+constexpr int N_2 = 1E5;
+constexpr int N_3 = 16;
 
+constexpr double n0 = 0.17;
+
+constexpr double cube_range = 838.;
+
+class nuclei{
+	private:
+		double x;
+		double y;
+		double z;
+		bool isproton;//true for proton, false for neutron
+	public:
+		nuclei(){
+			this->x=0;
+			this->y=0;
+			this->z=0;
+			this->isproton=false;
+		}
+		nuclei(double x0,double y0,double z0,bool isproton0){
+			this->x=x0;
+			this->y=y0;
+			this->z=z0;
+			this->isproton=isproton0;
+		}
+		~nuclei(){};
+		
+		double X(){
+			return this->x;
+		}
+		double Y(){
+			return this->y;
+		}
+		double Z(){
+			return this->z;
+		}
+		double r2(){
+			return this->x*this->x+this->y*this->y+this->z*this->z; 
+		}
+		double r(){
+			return sqrt(this->r2());
+		}
+		double set_xyz(double x0,double y0,double z0){
+			this->x=x0;
+			this->y=y0;
+			this->z=z0;
+			return this->r2();
+		}
+		bool set_type(bool isproton0){
+			this->isproton=isproton0;
+			return this->isproton;
+		}
+		bool Type(){
+			return this->isproton;
+		}
+};
+
+double rel_dis2(nuclei n1,nuclei n2){
+	double dx = n1.X()-n2.X();
+	double dy = n1.Y()-n2.Y();
+	double dz = n1.Z()-n2.Z();
+	return dx*dx+dy*dy+dz*dz;
+}
+
+double rel_dis(nuclei n1,nuclei n2){
+	return sqrt(rel_dis2(n1,n2));
+}
+
+void init_nucl(nuclei* ns, TRandom* Rdm ,int n_1 = N-1){
+	for (int i = 0 ; i <n_1 ; i++){
+		ns[i].set_xyz(cube_range*Rdm->Rndm(),cube_range*Rdm->Rndm(),cube_range*Rdm->Rndm());
+	}
+}
+
+constexpr double kappa = 0.05;
+constexpr double alpha = 0.05;
+
+double gnn(nuclei n1,nuclei n2){
+	double dis = rel_dis(n1,n2);
+	if (dis < 0.9 ){
+		return 1;
+	}
+	else{
+		return (kappa-1+exp((0.9-alpha)/dis))/(kappa);
+	}
+}
+
+constexpr double C = 0.05;
+
+double contact(nuclei n1,nuclei n2){
+	double dis = rel_dis(n1,n2);
+	return dis;
+}
+
+double rho_0(nuclei n1,nuclei n2){
+	double dis = rel_dis(n1,n2);
+	return dis;
+}
+
+constexpr double kf = 300;
+
+double exch(nuclei n1,nuclei n2, int Z = A/2){
+	double dis = rel_dis(n1,n2);
+	return Z/2/(Z-1)*pow((3*gsl_sf_bessel_j0(kf*dis)/kf/dis),2);
+}
+
+double phi_zero(nuclei n1,nuclei n2){
+	double dis= rel_dis(n1,n2);
+	return dis;
+}
+
+double corr(nuclei n1,nuclei n2){
+	
+	return 0;
+}
+
+double full_corr(nuclei* ns,int size =N_2){
+	double total = 1.;
+	for (int i = 0 ; i < size ; i++){
+		for(int j = i;j<size;j++){
+			total *= corr(ns[i],ns[j]);
+		}
+	}
+	return total;
+}
+
+constexpr double para_ppnn[5] = {3.17,0.995,1.81,5.90,-9.87};
+constexpr double para_pn[5] = {1.08,0.985,-0.432,-3.30,2.01};
+
+double F_oH(nuclei n1,nuclei n2){
+	const double* para;
+	if (n1.Type() xor n2.Type()){
+		para = para_pn;
+	}
+	else{
+		para = para_ppnn;
+	}
+	double r = rel_dis(n1,n2);
+	double dx = n1.X() - n2.X();
+	double dy = n1.Y() - n2.Y();
+	double dz = n1.Z() - n2.Z();
+
+	double F = 1. - exp(-para[0]*r*r)*(para[1]+r*(dx*para[2]+dy*para[3]+dz*para[4]));
+	return F;
+}
+
+constexpr double fermi_mom = 1.0688572E-4;
+
+double exch_factor(nuclei n1,nuclei n2){
+	double r = rel_dis(n1,n2);
+	return 1.-pow(3*gsl_sf_bessel_j0(r*fermi_mom)/r/fermi_mom,2)/2.;
+}
+
+double F_classic(nuclei n1,nuclei n2){
+	double F = F_oH(n1,n2);
+	double pauli_factor = exch_factor(n1,n2);
+	return F * pauli_factor;
+}
+
+double total_F_fermi(nuclei* ns, int* N_sel,int size = N_2){
+	double total = 1.;
+	for (int i = 0 ; i < size ; i++){
+		for(int j = 0 ; j < size ; j++){
+			total*= F_oH(ns[N_sel[i]],ns[N_sel[j]]);
+		}
+	}
+	return total;
+}
+
+double total_F_classic(nuclei* ns, int* N_sel,int size = N_2){
+	double total = 1.;
+	for (int i = 0 ; i < size ; i++){
+		for(int j = 0 ; j < size ; j++){
+			total*= F_classic(ns[N_sel[i]],ns[N_sel[j]]);
+		}
+	}
+	return total;
+}
+
+void met_search(nuclei* ns, int* N_sel ,int size = N_2){
+	
+}
 
 int main(){
+	TRandom* rdm = new TRandom();
+	nuclei* Ns = new nuclei[N_1];
+	init_nucl(Ns,rdm);
+
 	
 
-	// initialize particles
-	TH1D* test_pdf = generate_pdf();
-	particle * Ns = new particle[tot];
-	init_particle(test_pdf,Ns);
-	
-	// metropolis search
-	// met init
-	int N_sel[A]={0};//record selected
-	int N_tmp[A]={0};//record current
-
-	for (int i = 0 ; i < A ;i++){
-		N_sel[i]=i;
-		N_tmp[i]=N_sel[i];
-	}
-
-	all_searched = false;
-
-	double p1=0,p2=0;
-	TRandom* rdn = new TRandom();
-
-	do{
-		recurrent(N_sel);
-		p1 = total_prob(Ns,N_sel)/total_prob(Ns,N_tmp);
-		p2 = rdn->Rndm();
-		if(p1>p2){
-			for (int i = 0 ; i < A ;i++){
-				N_tmp[i]=N_sel[i];
-			}
-		}
-	}while(!all_searched);
-
-	for(int i = 0 ; i < A ;i++){
-		printf("(%f,%f,%f)",Ns[N_sel[i]].x,Ns[N_sel[i]].y,Ns[N_sel[i]].z);
-	}
 	return 0;
 }

@@ -16,7 +16,7 @@ SRCS=met.cc
 OBJS=$(subst .cc,.o,$(SRCS))
 
 
-ws: met.o
+met: met.o
 	$(CXX) $(LDFLAGS) -o met met.o $(LDLIBS)
 
 mrproper: 
