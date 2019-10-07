@@ -196,7 +196,7 @@ double rel_dis(nuclei n1,nuclei n2){
 	return sqrt(rel_dis2(n1,n2));
 }
 
-void init_nucl(nuclei* ns, TRandom* Rdm ,int n_1 = N-1){
+void init_nucl(nuclei* ns, TRandom* Rdm ,int n_1 = N_1){
 	for (int i = 0 ; i <n_1 ; i++){
 		ns[i].set_xyz(cube_range*Rdm->Rndm(),cube_range*Rdm->Rndm(),cube_range*Rdm->Rndm());
 	}
@@ -271,7 +271,7 @@ double F_oH(nuclei n1,nuclei n2){
 	double dz = n1.Z() - n2.Z();
 
 	double F = 1. - exp(-para[0]*r*r)*(para[1]+r*(dx*para[2]+dy*para[3]+dz*para[4]));
-	return F;
+	return F*1.05;
 }
 
 constexpr double fermi_mom = 1.0688572E-4;
@@ -290,7 +290,7 @@ double F_classic(nuclei n1,nuclei n2){
 double total_F_fermi(nuclei* ns, int* N_sel,int size = N_2){
 	double total = 1.;
 	for (int i = 0 ; i < size ; i++){
-		for(int j = 0 ; j < size ; j++){
+		for(int j = i ; j < size ; j++){
 			total*= F_oH(ns[N_sel[i]],ns[N_sel[j]]);
 		}
 	}
@@ -300,15 +300,34 @@ double total_F_fermi(nuclei* ns, int* N_sel,int size = N_2){
 double total_F_classic(nuclei* ns, int* N_sel,int size = N_2){
 	double total = 1.;
 	for (int i = 0 ; i < size ; i++){
-		for(int j = 0 ; j < size ; j++){
+		for(int j = i ; j < size ; j++){
 			total*= F_classic(ns[N_sel[i]],ns[N_sel[j]]);
 		}
 	}
 	return total;
 }
 
-void met_search(nuclei* ns, int* N_sel ,int size = N_2){
+void met_search(TRandom* rdm,nuclei* ns, int* N_sel, int*N_tmp ){
+	//write a random number generator to get the output
+	int tmp_N[N_2];
+	int tmp_N2[N_2];
+	int tmp_index = rdm->Integer(N_2);
+	int tmp_index2 = rdm->Integer(N_1-N_2);
+	tmp_N[tmp_index] = N_tmp[tmp_index2];
+
+	for (int i = 0 ; i < N_2; i++){
+		tmp_N2[i] = N_sel[i];
+		if(i == tmp_index) continue;
+		tmp_N[i] = N_tmp[N_1-1-i];
+	}
 	
+	double p1 = total_F_fermi(ns,tmp_N2)/total_F_fermi(ns,tmp_N);
+	double p2 = rdm->Rndm();
+	if (p1 > p2){
+		N_sel[tmp_index] = tmp_N[tmp_index];
+		N_tmp[tmp_index2] = N_tmp[N_1-1-tmp_index];
+		N_tmp[N_1-1-tmp_index] = N_sel[tmp_index];
+	}
 }
 
 int main(){
@@ -316,7 +335,23 @@ int main(){
 	nuclei* Ns = new nuclei[N_1];
 	init_nucl(Ns,rdm);
 
+	int N_sel[N_2];
+	int N_tmp[N_1];
+
+	for (int i = 0; i < N_1; i++){
+		N_tmp[i] = i;
+		if (i>= N_1-N_2){
+			N_sel[N_1 -1 - i] =i; 
+		}
+	}
+
+	constexpr int count = 10000;
 	
+	// for (int i = 0; i < count ; i++){
+	// 	met_search(rdm,Ns,N_sel,N_tmp);
+	// }
+	
+	cout<<total_F_fermi(Ns,N_sel)<<endl;
 
 	return 0;
 }
